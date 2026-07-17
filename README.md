@@ -1,0 +1,2 @@
+cd "[redacted]"
+./deploy.sh
