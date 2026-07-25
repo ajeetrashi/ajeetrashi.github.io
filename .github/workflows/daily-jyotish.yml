@@ -1,0 +1,31 @@
+name: Daily Jyotish Brief
+
+# Sends Ajeet's daily brief at 9 AM Singapore time (01:00 UTC) via ntfy.
+# NOTE: scheduled workflows only run from the DEFAULT branch (main), so this
+# must be merged to main to fire on schedule. Use "Run workflow" to test first.
+
+on:
+  schedule:
+    - cron: "0 1 * * *"   # 01:00 UTC = 09:00 Asia/Singapore
+  workflow_dispatch: {}      # manual test button in the Actions tab
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-jyotish
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Send today's brief
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_SERVER: ${{ secrets.NTFY_SERVER }}
+        run: python scripts/daily_jyotish.py
