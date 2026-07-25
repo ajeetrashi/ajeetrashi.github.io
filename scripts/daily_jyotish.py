@@ -156,7 +156,7 @@ def build_message(now):
 
 def main():
     topic = os.environ.get("NTFY_TOPIC") or DEFAULT_TOPIC
-    server = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
+    server = (os.environ.get("NTFY_SERVER") or "https://ntfy.sh").rstrip("/")
 
     now = datetime.datetime.now(SGT)
     body, title, priority, tags = build_message(now)
