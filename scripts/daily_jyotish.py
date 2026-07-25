@@ -18,7 +18,7 @@ SGT = ZoneInfo("Asia/Singapore")
 
 # ntfy topic baked in so NO repo secret is needed — just subscribe to this exact
 # name in the ntfy app. (An NTFY_TOPIC repo secret, if ever set, overrides this.)
-DEFAULT_TOPIC = "ajeet-jyotish-2f8k3m9q"
+DEFAULT_TOPIC = "ajeet-jyotish-7k3n9q2p4w"
 
 # The anchor — shown at the top of every single day's brief.
 DIPLOMACY = "DIPLOMACY TODAY - do NOT pick a fight. Win by patience, not by being right out loud. 24-hour rule on anything hot. A closed mouth loses nothing."

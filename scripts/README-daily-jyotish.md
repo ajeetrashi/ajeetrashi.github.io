@@ -10,7 +10,7 @@ The ntfy topic is **baked into the script** (`DEFAULT_TOPIC` in
 ## 1. Subscribe in the ntfy app
 Install **ntfy** (App Store / Play Store), allow notifications, tap **+**, and
 subscribe to the exact topic in `DEFAULT_TOPIC` (currently
-`ajeet-jyotish-2f8k3m9q`).
+`ajeet-jyotish-7k3n9q2p4w`).
 
 ## 2. Make it live
 Scheduled Actions only run from the **default branch (`main`)**, so **merge this to main**.
