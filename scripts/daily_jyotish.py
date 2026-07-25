@@ -16,6 +16,10 @@ from zoneinfo import ZoneInfo
 
 SGT = ZoneInfo("Asia/Singapore")
 
+# ntfy topic baked in so NO repo secret is needed — just subscribe to this exact
+# name in the ntfy app. (An NTFY_TOPIC repo secret, if ever set, overrides this.)
+DEFAULT_TOPIC = "ajeet-jyotish-2f8k3m9q"
+
 # The anchor — shown at the top of every single day's brief.
 DIPLOMACY = "DIPLOMACY TODAY - do NOT pick a fight. Win by patience, not by being right out loud. 24-hour rule on anything hot. A closed mouth loses nothing."
 
@@ -151,10 +155,7 @@ def build_message(now):
 
 
 def main():
-    topic = os.environ.get("NTFY_TOPIC")
-    if not topic:
-        print("ERROR: NTFY_TOPIC secret is not set. Add it in repo Settings > Secrets and variables > Actions.", file=sys.stderr)
-        return 1
+    topic = os.environ.get("NTFY_TOPIC") or DEFAULT_TOPIC
     server = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
 
     now = datetime.datetime.now(SGT)
