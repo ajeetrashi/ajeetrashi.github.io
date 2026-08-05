@@ -59,6 +59,24 @@ pip install -r requirements.txt
 3. Live ports (`4001` gateway / `7496` TWS) — only after full validation,
    and only by editing `config.py` deliberately.
 
+## Going live (real money)
+
+Two deliberate edits in `config.py`:
+
+1. `ConnectionConfig.port` → `4001` (IB Gateway live) or `7496` (TWS live)
+2. `BotConfig.dry_run` → `False`
+
+Strongly recommended first: run one cycle against the **live** login with
+`dry_run` still `True` (`python main.py --once`). This connects to the real
+account, reads the real balance (SGD base currency is auto-converted to USD
+at the forex midpoint), and logs the exact orders it *would* place — without
+sending anything. Only flip `dry_run` after that log looks right.
+
+Timing note: the decision cycle runs ~15:50 US/Eastern, which is ~03:50am
+Singapore time. The machine running the bot must be awake with IB Gateway
+logged in at that hour (on a Mac: keep it plugged in and run
+`caffeinate -i python main.py`, or disable sleep in System Settings).
+
 ## Running
 
 ```bash

@@ -15,7 +15,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime
 
-from ib_async import IB, LimitOrder, MarketOrder, Order, StopOrder, Trade
+from ib_async import IB, Forex, LimitOrder, MarketOrder, Order, StopOrder, Trade
 
 from config import CONFIG
 from data_fetcher import make_contract
@@ -87,16 +87,53 @@ class IBConnection:
 # Account helpers
 # ---------------------------------------------------------------------------
 
+async def usd_conversion_rate(ib: IB, currency: str) -> float | None:
+    """USD value of 1 unit of `currency` (e.g. SGD -> ~0.74), via the
+    latest midpoint of the USD.<currency> forex pair. None on failure —
+    callers must treat that as "size nothing", never guess a rate."""
+    if currency == "USD":
+        return 1.0
+    try:
+        pair = Forex("USD" + currency)
+        await ib.qualifyContractsAsync(pair)
+        bars = await asyncio.wait_for(
+            ib.reqHistoricalDataAsync(
+                pair, endDateTime="", durationStr="2 D",
+                barSizeSetting="1 day", whatToShow="MIDPOINT", useRTH=False,
+            ),
+            timeout=CONFIG.connection.request_timeout_s,
+        )
+        if bars and bars[-1].close > 0:
+            return 1.0 / bars[-1].close      # <ccy> per USD -> USD per <ccy>
+    except Exception as exc:  # noqa: BLE001
+        log.error("FX rate USD%s unavailable: %s", currency, exc)
+    return None
+
+
 async def account_values(ib: IB) -> tuple[float, float]:
-    """(net_liquidation, buying_power) in USD."""
+    """(net_liquidation, buying_power) in USD.
+
+    IBKR reports account summary in the account's BASE currency (SGD for
+    this account), so non-USD values are converted at the current forex
+    midpoint. If the FX rate can't be fetched, returns (0, 0) so sizing
+    fails closed instead of trading on a wrong account value.
+    """
     summary = await ib.accountSummaryAsync()
-    nlv = bp = 0.0
+    raw: dict[str, tuple[float, str]] = {}
     for row in summary:
-        if row.tag == "NetLiquidation" and row.currency == "USD":
-            nlv = float(row.value)
-        elif row.tag == "BuyingPower" and row.currency == "USD":
-            bp = float(row.value)
-    return nlv, bp
+        if row.tag in ("NetLiquidation", "BuyingPower"):
+            raw[row.tag] = (float(row.value), row.currency)
+
+    out = []
+    for tag in ("NetLiquidation", "BuyingPower"):
+        value, ccy = raw.get(tag, (0.0, "USD"))
+        rate = await usd_conversion_rate(ib, ccy)
+        if rate is None:
+            log.critical("%s reported in %s but no FX rate — refusing to size",
+                         tag, ccy)
+            return 0.0, 0.0
+        out.append(value * rate)
+    return out[0], out[1]
 
 
 # ---------------------------------------------------------------------------
