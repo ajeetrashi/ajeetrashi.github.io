@@ -1,0 +1,32 @@
+name: Daily Jyotish Brief
+
+# Sends Ajeet's daily brief around 9 AM Singapore time via ntfy.
+# NOTE: scheduled workflows only run from the DEFAULT branch (main). GitHub's
+# scheduler can lag 20-60 min, so 00:30 UTC is used to land near 09:00 SGT.
+# The ntfy topic comes from the NTFY_TOPIC repo secret (never hardcoded).
+
+on:
+  schedule:
+    - cron: "30 0 * * *"   # ~00:30 UTC = ~08:30 SGT; lands ~09:00-09:30 SGT after scheduler lag
+  workflow_dispatch: {}      # manual test button in the Actions tab
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-jyotish
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Send today's brief
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_SERVER: ${{ secrets.NTFY_SERVER }}
+        run: python scripts/daily_jyotish.py
