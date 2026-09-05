@@ -82,7 +82,14 @@ logged in at that hour (on a Mac: keep it plugged in and run
 ```bash
 python main.py --once    # one decision cycle immediately (dry test)
 python main.py           # scheduled loop: runs ~10 min before each close
+python main.py --status  # is it alive? what did it last do? (no IB needed)
 ```
+
+`--status` reads `logs/heartbeat.json`, which the bot touches at every
+start, sleep, cycle, and stop. It prints ALIVE / NOT RUNNING, the last
+cycle's summary (symbols scanned, setups found, open positions, day trades
+used) and the next scheduled cycle. A heartbeat older than ~26 hours means
+the process died or the Mac went to sleep — restart it.
 
 With `dry_run = True` (default) the bot logs the exact bracket it *would*
 send — symbol, share count, stop/limit/SL/TP prices — without transmitting.
