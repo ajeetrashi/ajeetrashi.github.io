@@ -28,7 +28,8 @@
 
     // ── Date helpers ──
     function todayStr() {
-        return new Date().toISOString().slice(0, 10);
+        const d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
 
     function formatDate(d) {
@@ -160,6 +161,7 @@
         setupQuickAdd();
         setupModals();
         checkDayReset();
+        setInterval(checkDayReset, 60000);
         requestNotificationPermission();
         scheduleNotifications();
     }
@@ -622,8 +624,18 @@
             renderOuraTrend(readinessRes.data || []);
 
             Store.set('ouraLastSync', new Date().toISOString());
+            const statusEl = $('#oura-status');
+            if (statusEl) {
+                statusEl.textContent = 'Synced';
+                statusEl.className = 'connection-status connected';
+            }
         } catch (err) {
             console.error('Oura fetch error:', err);
+            const statusEl = $('#oura-status');
+            if (statusEl) {
+                statusEl.textContent = 'Sync failed: ' + err.message;
+                statusEl.className = 'connection-status error';
+            }
         }
     }
 
@@ -719,11 +731,19 @@
 
         // Export
         $('#export-data-btn').addEventListener('click', () => {
+            const completionHistory = {};
+            Object.keys(localStorage)
+                .filter(k => k.startsWith('has_completed_'))
+                .forEach(k => {
+                    const dateKey = k.replace('has_completed_', '');
+                    completionHistory[dateKey] = JSON.parse(localStorage.getItem(k));
+                });
             const data = {
                 tasks,
                 protocols,
                 biomarkers,
                 preferences,
+                completionHistory,
                 exportDate: new Date().toISOString()
             };
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -747,6 +767,11 @@
                     if (data.protocols) { protocols = data.protocols; Store.set('protocols', protocols); }
                     if (data.biomarkers) { biomarkers = data.biomarkers; Store.set('biomarkers', biomarkers); }
                     if (data.preferences) { preferences = data.preferences; Store.set('preferences', preferences); }
+                    if (data.completionHistory) {
+                        Object.entries(data.completionHistory).forEach(([dateKey, completion]) => {
+                            localStorage.setItem('has_completed_' + dateKey, JSON.stringify(completion));
+                        });
+                    }
                     renderTasks();
                     renderProtocols();
                     renderBiomarkers();
