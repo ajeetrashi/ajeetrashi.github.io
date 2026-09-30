@@ -14,6 +14,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import NamedTuple
 
 from ib_async import IB, Forex, LimitOrder, MarketOrder, Order, StopOrder, Trade
 
@@ -110,30 +111,43 @@ async def usd_conversion_rate(ib: IB, currency: str) -> float | None:
     return None
 
 
-async def account_values(ib: IB) -> tuple[float, float]:
-    """(net_liquidation, buying_power) in USD.
+class AccountValues(NamedTuple):
+    net_liquidation: float
+    buying_power: float
+    available_funds: float
+
+
+ACCOUNT_TAGS = ("NetLiquidation", "BuyingPower", "AvailableFunds")
+
+
+async def account_values(ib: IB) -> AccountValues:
+    """Net liquidation, buying power and available funds, all in USD.
 
     IBKR reports account summary in the account's BASE currency (SGD for
     this account), so non-USD values are converted at the current forex
-    midpoint. If the FX rate can't be fetched, returns (0, 0) so sizing
+    midpoint. If the FX rate can't be fetched, returns zeros so sizing
     fails closed instead of trading on a wrong account value.
+
+    BuyingPower is a margin multiple of what the account can actually
+    settle; AvailableFunds is what is genuinely free right now. Both are
+    returned so sizing can be capped by the smaller of the two.
     """
     summary = await ib.accountSummaryAsync()
     raw: dict[str, tuple[float, str]] = {}
     for row in summary:
-        if row.tag in ("NetLiquidation", "BuyingPower"):
+        if row.tag in ACCOUNT_TAGS:
             raw[row.tag] = (float(row.value), row.currency)
 
     out = []
-    for tag in ("NetLiquidation", "BuyingPower"):
+    for tag in ACCOUNT_TAGS:
         value, ccy = raw.get(tag, (0.0, "USD"))
         rate = await usd_conversion_rate(ib, ccy)
         if rate is None:
             log.critical("%s reported in %s but no FX rate — refusing to size",
                          tag, ccy)
-            return 0.0, 0.0
+            return AccountValues(0.0, 0.0, 0.0)
         out.append(value * rate)
-    return out[0], out[1]
+    return AccountValues(*out)
 
 
 # ---------------------------------------------------------------------------
@@ -205,17 +219,33 @@ class Executor:
             log.info("%s: already holding — one position per symbol", signal.symbol)
             return None
 
-        nlv, buying_power = await account_values(ib)
-        shares = position_size(nlv, signal.stop_loss_distance)
-        shares = affordable_size(shares, signal.limit_price, buying_power)
+        acct = await account_values(ib)
+        shares = position_size(acct.net_liquidation, signal.stop_loss_distance)
+        shares = affordable_size(shares, signal.limit_price, acct.buying_power)
+
+        # Buying power is a margin multiple of what the account can settle, so
+        # cap again on AvailableFunds: a signal the account cannot actually
+        # fund today is not a tradeable signal.
+        funded = affordable_size(shares, signal.limit_price, acct.available_funds)
+        if funded < shares:
+            log.warning("%s: %d -> %d shares, capped by available funds "
+                        "($%.0f free at limit %.2f)",
+                        signal.symbol, shares, funded, acct.available_funds,
+                        signal.limit_price)
+        shares = funded
+
         if shares <= 0:
-            log.warning("%s: sized to 0 shares (nlv=%.0f, SL dist=%.2f) — skipping",
-                        signal.symbol, nlv, signal.stop_loss_distance)
+            log.warning("%s: sized to 0 shares (nlv=%.0f, available=%.0f, "
+                        "SL dist=%.2f) — skipping", signal.symbol,
+                        acct.net_liquidation, acct.available_funds,
+                        signal.stop_loss_distance)
             return None
 
         risk = shares * signal.stop_loss_distance
-        log.info("%s: sizing %d shares — max SL loss $%.0f (%.2f%% of NLV $%.0f)",
-                 signal.symbol, shares, risk, 100 * risk / nlv, nlv)
+        log.info("%s: sizing %d shares — max SL loss $%.0f (%.2f%% of NLV $%.0f), "
+                 "R:R %.2f", signal.symbol, shares, risk,
+                 100 * risk / acct.net_liquidation, acct.net_liquidation,
+                 signal.reward_risk)
 
         if CONFIG.dry_run:
             log.info("[DRY RUN] %s bracket NOT transmitted: BUY %d STP %.2f "
