@@ -57,6 +57,15 @@ class StrategyConfig:
     take_profit_sma_period: int = 10        # TP limit = 10-day SMA, refreshed daily
     time_stop_sessions: int = 5             # flat at market before close on day 5
 
+    # Reward:risk floor, measured as
+    #   (sma10 - entry_stop_trigger) / stop_loss_distance
+    # at setup time. 0.0 rejects only structurally broken setups — those whose
+    # take-profit reference already sits at or below the entry trigger, which
+    # would place a bracket that cannot win. Raising it also filters thin
+    # mean-reversion setups: this strategy is deliberately low-R / high-win-rate,
+    # so BACK-TEST before raising this above 0.0.
+    min_reward_risk_ratio: float = 0.0
+
     # Data
     daily_bars_lookback: str = "1 Y"        # enough history for SMA50 + warmup
 
